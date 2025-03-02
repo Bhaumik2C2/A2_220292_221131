@@ -6,7 +6,7 @@ A Python-based DNS resolver that performs both **iterative** and **recursive** D
 - Supports **iterative** DNS resolution by querying root, TLD, and authoritative DNS servers.
 - Supports **recursive** DNS resolution using the system's default resolver.
 - Uses **root servers** as the starting point for iterative resolution.
-- Extracts and resolves **NS (Nameserver) records**.
+- Extracts and resolves **NS (Nameserver) records** to their respective IP addresses.
 - Implements **timeout handling** to avoid long waits on unresponsive servers.
 
 ## Requirements
@@ -50,11 +50,13 @@ python3 dns_resolver.py recursive example.com
 1. Queries a **root DNS server**.
 2. Retrieves **TLD nameservers** and queries them.
 3. Retrieves **authoritative nameservers** and queries them until an IP is found.
-4. If successful, prints the resolved IP address.
+4. Extracts NS hostnames and resolves them to IP addresses.
+5. Moves through the resolution hierarchy from **ROOT** → **TLD** → **AUTH**.
+6. If successful, prints the resolved IP address.
 
 ### Recursive DNS Lookup
 1. Uses the system’s default resolver (or a configured public DNS like Google or Cloudflare).
-2. Queries for **NS (Nameserver) records** first.
+2. Queries for **NS (Nameserver) records** and prints them.
 3. Queries for **A (IPv4 Address) records** and prints the final result.
 
 ## Example Output
@@ -76,9 +78,52 @@ Time taken: 1.234 seconds
 Time taken: 0.567 seconds
 ```
 
-## Error Handling
-- If a server does not respond within the timeout, it moves to the next available nameserver.
-- If resolution fails at any stage, an error message is displayed.
+## Changes Made
+### `send_dns_query()`
+- Added functionality to send a DNS query using UDP:
+  ```python
+  query = dns.message.make_query(domain, dns.rdatatype.A)  # Construct the DNS query
+  response = dns.query.udp(query, server, timeout=TIMEOUT)  # Send the query using UDP
+  return response
+  ```
 
+### `extract_next_nameservers()`
+- Resolved NS hostnames to IP addresses using A records:
+  ```python
+  for ns_name in ns_names:
+      try:
+          answer = dns.resolver.resolve(ns_name, "A")  # Query for A records
+          for rdata in answer:
+              ns_ips.append(rdata.to_text())  
+              print(f"Resolved {ns_name} to {rdata.to_text()}")  # Print resolution
+      except Exception:
+          print(f"[WARNING] Could not resolve NS {ns_name}")  # Handle failures
+  ```
 
+### `iterative_dns_lookup()`
+- Updated stage transitions in the iterative lookup process:
+  ```python
+  if stage == "ROOT":
+      stage = "TLD"
+  elif stage == "TLD":
+      stage = "AUTH"
+  ```
+
+### `recursive_dns_lookup()`
+- Enhanced recursive lookup to first resolve NS records, then A records:
+  ```python
+  answer_ns = dns.resolver.resolve(domain, "NS")
+  ns_list = []
+  for rdata in answer_ns:
+      ns_list.append(rdata.target.to_text())  # Append them in a list
+  
+  # Print authoritative NS servers in the order they are received
+  for rdata in ns_list:
+      print(f"[SUCCESS] {domain} -> {rdata}")
+
+  # Query for A record (IPv4 Address)
+  answer_a = dns.resolver.resolve(domain, "A")
+  for rdata in answer_a:
+      print(f"[SUCCESS] {domain} -> {rdata}")
+  ```
 
