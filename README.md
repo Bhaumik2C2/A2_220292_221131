@@ -80,9 +80,5 @@ Time taken: 0.567 seconds
 - If a server does not respond within the timeout, it moves to the next available nameserver.
 - If resolution fails at any stage, an error message is displayed.
 
-## License
-This script is open-source and can be modified or distributed freely.
 
-## Author
-Your Name
 
